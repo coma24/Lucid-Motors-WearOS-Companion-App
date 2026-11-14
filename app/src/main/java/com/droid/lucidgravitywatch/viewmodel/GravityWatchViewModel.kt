@@ -1341,8 +1341,8 @@ class GravityWatchViewModel(
 
     private fun GravityVehicleSnapshot.describeState(): String =
         "$nickname [$model] power=${powerState.name}($powerStateCode) lock=${lockState.name} " +
-            "frunk=${frunkState.name} trunk=${rearTrunkState.name} charge=${chargeState.name} " +
-            "battery=${batteryPercent.toInt()}% reported=${formatReportTime(lastUpdatedMs)}"
+            "frunk=${frunkState.name} trunk=${rearTrunkState.name} port=${chargePortState.name} " +
+            "charge=${chargeState.name} kW=${"%.2f".format(Locale.US, chargeRateKw)} battery=${batteryPercent.toInt()}% reported=${formatReportTime(lastUpdatedMs)}"
 
     /** Lucid's report time (server clock) as wall-clock time in the watch's time zone. */
     private fun formatReportTime(epochMs: Long): String =
