@@ -36,7 +36,10 @@ import com.droid.lucidgravitywatch.model.SeatClimateMode
 import com.droid.lucidgravitywatch.model.SteeringWheelHeaterLevel
 import com.droid.lucidgravitywatch.model.VehicleModel
 import com.droid.lucidgravitywatch.model.WalkawayState
+import com.droid.lucidgravitywatch.theme.CrimsonAlert
+import com.droid.lucidgravitywatch.theme.CryoBlue
 import com.droid.lucidgravitywatch.theme.LucidGravityWatchTheme
+import com.droid.lucidgravitywatch.theme.ThermalAmber
 import com.droid.lucidgravitywatch.viewmodel.GravityWatchUiState
 import com.droid.lucidgravitywatch.viewmodel.WatchPage
 import org.junit.Assert.assertEquals
@@ -296,10 +299,12 @@ class GravityWatchAppUiTest {
         // 4. Horn and lights moved off the home screen; the bottom row opens the drill-down pages
         composeTestRule.onNodeWithTag("overview_horn_button").assertDoesNotExist()
         composeTestRule.onNodeWithTag("overview_lights_button").assertDoesNotExist()
-        composeTestRule.onNodeWithTag("nav_climate_button").performClick()
+        // Climate button displays interior temperature (21.0°C -> 70° in Fahrenheit mode)
+        composeTestRule.onNodeWithText("70°").assertIsDisplayed()
         composeTestRule.onNodeWithTag("nav_charging_button").performClick()
+        composeTestRule.onNodeWithTag("nav_climate_button").performClick()
         composeTestRule.onNodeWithTag("nav_flonk_button").performClick()
-        assertEquals(listOf(WatchPage.CLIMATE, WatchPage.CHARGING, WatchPage.FLONK), openedPages)
+        assertEquals(listOf(WatchPage.CHARGING, WatchPage.CLIMATE, WatchPage.FLONK), openedPages)
     }
 
     @Test
@@ -704,6 +709,8 @@ class GravityWatchAppUiTest {
                 )
             }
         }
+        composeTestRule.onNodeWithText("FLONK").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Flonk").assertDoesNotExist()
         composeTestRule.onNodeWithTag("flonk_lights_button").performClick()
         composeTestRule.onNodeWithTag("flonk_horn_button").performClick()
         assertTrue(flashed)
@@ -769,6 +776,25 @@ class GravityWatchAppUiTest {
         composeTestRule.onNodeWithTag("login_password_input").assertDoesNotExist()
         composeTestRule.onNodeWithTag("login_email_input").assertIsDisplayed()
         composeTestRule.onNodeWithText("pilot@lucidmotors.com").assertIsDisplayed()
+    }
+
+    @Test
+    fun temperatureDisplayColor_matchesThresholdsInFahrenheitAndCentigrade() {
+        // Centigrade thresholds: <15C CryoBlue, 15..29C White, 30..39C ThermalAmber, >=40C CrimsonAlert
+        assertEquals(CryoBlue, temperatureDisplayColor(14.4, useFahrenheit = false))
+        assertEquals(androidx.compose.ui.graphics.Color.White, temperatureDisplayColor(15.0, useFahrenheit = false))
+        assertEquals(androidx.compose.ui.graphics.Color.White, temperatureDisplayColor(29.4, useFahrenheit = false))
+        assertEquals(ThermalAmber, temperatureDisplayColor(30.0, useFahrenheit = false))
+        assertEquals(ThermalAmber, temperatureDisplayColor(39.4, useFahrenheit = false))
+        assertEquals(CrimsonAlert, temperatureDisplayColor(40.0, useFahrenheit = false))
+
+        // Fahrenheit thresholds: <60F CryoBlue, 60..84F White, 85..103F ThermalAmber, >=104F CrimsonAlert
+        assertEquals(CryoBlue, temperatureDisplayColor((59.0 - 32.0) * 5.0 / 9.0, useFahrenheit = true))
+        assertEquals(androidx.compose.ui.graphics.Color.White, temperatureDisplayColor((60.0 - 32.0) * 5.0 / 9.0, useFahrenheit = true))
+        assertEquals(androidx.compose.ui.graphics.Color.White, temperatureDisplayColor((84.0 - 32.0) * 5.0 / 9.0, useFahrenheit = true))
+        assertEquals(ThermalAmber, temperatureDisplayColor((85.0 - 32.0) * 5.0 / 9.0, useFahrenheit = true))
+        assertEquals(ThermalAmber, temperatureDisplayColor((103.0 - 32.0) * 5.0 / 9.0, useFahrenheit = true))
+        assertEquals(CrimsonAlert, temperatureDisplayColor((104.0 - 32.0) * 5.0 / 9.0, useFahrenheit = true))
     }
 }
 

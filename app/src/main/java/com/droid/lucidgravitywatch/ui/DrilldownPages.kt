@@ -188,14 +188,14 @@ internal fun ClimatePage(
                 ) {
                     Text(
                         text = vehicle.formatTemperature(vehicle.interiorTempCelsius, useF),
-                        color = Color.White,
+                        color = temperatureDisplayColor(vehicle.interiorTempCelsius, useF),
                         fontSize = 30.sp,
                         lineHeight = 30.sp,
                         fontWeight = FontWeight.ExtraBold
                     )
                     Text(
                         text = "${vehicle.formatTemperature(vehicle.exteriorTempCelsius, useF)} out",
-                        color = LucidSilver,
+                        color = temperatureDisplayColor(vehicle.exteriorTempCelsius, useF),
                         fontSize = 11.sp,
                         lineHeight = 12.sp
                     )
@@ -343,6 +343,7 @@ internal fun ChargingPage(
                 ).toDouble(),
             minValue = GravityWatchViewModel.MIN_CHARGE_LIMIT_PERCENT.toDouble(),
             maxValue = GravityWatchViewModel.MAX_CHARGE_LIMIT_PERCENT.toDouble(),
+            arcMinValue = 0.0,
             step = 1.0,
             format = { "${it.roundToInt()}%" },
             confirmEnabled = controlsEnabled,
@@ -394,8 +395,7 @@ internal fun ChargingPage(
     Box(modifier = Modifier.fillMaxSize()) {
         BatteryRing(
             percent = batteryPercent,
-            limitPercent = vehicle.chargeLimitPercent,
-            charging = isCharging
+            limitPercent = vehicle.chargeLimitPercent
         )
         BoxWithConstraints(modifier = Modifier.fillMaxSize().testTag("charging_page")) {
             Column(
@@ -466,41 +466,44 @@ internal fun ChargingPage(
 }
 
 /**
- * Battery level as a ring around the edge of the round screen, starting at the top: green while
- * charging. A gold tick marks the charge limit.
+ * Battery level as a 270° ring around the edge of the round screen (matching [ValueArc]), green
+ * up to [percent] and [StealthBorder] after that. A gold tick marks [limitPercent].
  */
 @Composable
-private fun BatteryRing(percent: Int, limitPercent: Int, charging: Boolean) {
+private fun BatteryRing(percent: Int, limitPercent: Int) {
     Canvas(modifier = Modifier.fillMaxSize().testTag("charging_battery_ring")) {
-        val stroke = 4.dp.toPx()
-        val inset = 3.dp.toPx() + stroke / 2f
-        val arcSize = Size(size.minDimension - inset * 2, size.minDimension - inset * 2)
-        val topLeft = Offset((size.width - arcSize.width) / 2f, (size.height - arcSize.height) / 2f)
+        val stroke = 6.dp.toPx()
+        val inset = VALUE_ARC_INSET.toPx()
+        val diameter = size.minDimension - inset * 2
+        val topLeft = Offset((size.width - diameter) / 2f, (size.height - diameter) / 2f)
+        val arcSize = Size(diameter, diameter)
         drawArc(
             color = StealthBorder,
-            startAngle = 0f,
-            sweepAngle = 360f,
-            useCenter = false,
-            topLeft = topLeft,
-            size = arcSize,
-            style = Stroke(width = stroke)
-        )
-        drawArc(
-            color = if (charging) AuroraGreen else LucidSilver,
-            startAngle = -90f,
-            sweepAngle = 360f * percent / 100f,
+            startAngle = ARC_START_DEGREES,
+            sweepAngle = ARC_SWEEP_DEGREES,
             useCenter = false,
             topLeft = topLeft,
             size = arcSize,
             style = Stroke(width = stroke, cap = StrokeCap.Round)
         )
-        // Charge limit tick, across the ring
-        val angle = Math.toRadians(-90.0 + 360.0 * limitPercent.coerceIn(0, 100) / 100.0)
+        val chargeFraction = (percent.coerceIn(0, 100) / 100f)
+        drawArc(
+            color = AuroraGreen,
+            startAngle = ARC_START_DEGREES,
+            sweepAngle = ARC_SWEEP_DEGREES * chargeFraction,
+            useCenter = false,
+            topLeft = topLeft,
+            size = arcSize,
+            style = Stroke(width = stroke, cap = StrokeCap.Round)
+        )
+        // Charge limit tick, across the ring at the corresponding percentage
+        val limitFraction = (limitPercent.coerceIn(0, 100) / 100.0)
+        val angle = Math.toRadians(ARC_START_DEGREES + ARC_SWEEP_DEGREES * limitFraction)
         val center = Offset(size.width / 2f, size.height / 2f)
-        val radius = arcSize.width / 2f
+        val radius = diameter / 2f
         val dx = kotlin.math.cos(angle).toFloat()
         val dy = kotlin.math.sin(angle).toFloat()
-        val half = stroke * 1.6f
+        val half = stroke * 1.4f
         drawLine(
             color = EurekaGold,
             start = Offset(center.x + dx * (radius - half), center.y + dy * (radius - half)),
@@ -730,9 +733,10 @@ internal fun FlonkPage(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        PageTitle("FLONK")
         PageStatusLine(uiState)
-        Spacer(modifier = Modifier.height(12.dp))
+        if (uiState.errorMessage != null || uiState.controlsLockedReason != null) {
+            Spacer(modifier = Modifier.height(8.dp))
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(22.dp)) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 ControlIconButton(
@@ -741,12 +745,13 @@ internal fun FlonkPage(
                     isActive = false,
                     isPrimaryCenter = false,
                     activeColor = EurekaGold,
+                    size = 66.24.dp,
                     onClick = onFlashLights,
                     enabled = controlsEnabled,
                     testTag = "flonk_lights_button"
                 )
                 Spacer(modifier = Modifier.height(4.dp))
-                Text("Flash", color = LucidSilver, fontSize = 11.sp)
+                Text("Flash", color = LucidSilver, fontSize = 13.2.sp)
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 ControlIconButton(
@@ -755,12 +760,13 @@ internal fun FlonkPage(
                     isActive = false,
                     isPrimaryCenter = false,
                     activeColor = EurekaGold,
+                    size = 66.24.dp,
                     onClick = onHonkHorn,
                     enabled = controlsEnabled,
                     testTag = "flonk_horn_button"
                 )
                 Spacer(modifier = Modifier.height(4.dp))
-                Text("Honk", color = LucidSilver, fontSize = 11.sp)
+                Text("Honk", color = LucidSilver, fontSize = 13.2.sp)
             }
         }
     }
@@ -1145,6 +1151,8 @@ private fun ValueEditor(
     confirmEnabled: Boolean,
     /** Step for the arc and the crown/bezel; [step] is for the -/+ buttons. */
     fineStep: Double = step,
+    /** Value corresponding to 0% of the visual 270° arc (defaults to [minValue]). */
+    arcMinValue: Double = minValue,
     statusText: String?,
     testTagPrefix: String,
     onCancel: () -> Unit,
@@ -1213,10 +1221,10 @@ private fun ValueEditor(
     ) {
         // Behind the buttons, so taps on them still reach them.
         ValueArc(
-            fraction = ((value - minValue) / (maxValue - minValue)).toFloat(),
+            fraction = ((value - arcMinValue) / (maxValue - arcMinValue)).toFloat(),
             onFraction = { fraction ->
-                val steps = ((fraction * (maxValue - minValue)) / fineStep).roundToInt()
-                setValue(minValue + steps * fineStep)
+                val steps = ((fraction * (maxValue - arcMinValue)) / fineStep).roundToInt()
+                setValue(arcMinValue + steps * fineStep)
             },
             testTag = "${testTagPrefix}_arc"
         )

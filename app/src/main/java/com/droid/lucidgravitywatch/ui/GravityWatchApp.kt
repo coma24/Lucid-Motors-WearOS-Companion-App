@@ -68,6 +68,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.droid.lucidgravitywatch.R
@@ -88,6 +89,7 @@ import com.droid.lucidgravitywatch.theme.ObsidianBlack
 import com.droid.lucidgravitywatch.theme.StealthBorder
 import com.droid.lucidgravitywatch.theme.StealthCard
 import com.droid.lucidgravitywatch.theme.StealthSurface
+import com.droid.lucidgravitywatch.theme.ThermalAmber
 import com.droid.lucidgravitywatch.viewmodel.GravityWatchUiState
 import com.droid.lucidgravitywatch.viewmodel.GravityWatchViewModel
 import com.droid.lucidgravitywatch.viewmodel.WatchPage
@@ -702,6 +704,16 @@ private fun SimplifiedWatchDashboard(
             chargePercent >= 80 -> AuroraGreen
             else -> Color.White
         }
+        val powerColor = when {
+            vehicle.chargeRateKw < -0.1 -> CryoBlue
+            vehicle.chargeRateKw > 0.1 -> AuroraGreen
+            else -> LucidSilver
+        }
+        val boltTint = if (vehicle.chargeState == ChargeState.EVSE_NOT_READY) {
+            CrimsonAlert
+        } else {
+            powerColor
+        }
 
         // Top Section: Current Charge Level & Vehicle Name moved down by 5% of screen vertical height
         Column(
@@ -761,16 +773,6 @@ private fun SimplifiedWatchDashboard(
                             .testTag("vehicle_status_text")
                     )
                 } else if (showChargingPower) {
-                    val powerColor = when {
-                        vehicle.chargeRateKw < -0.1 -> CryoBlue
-                        vehicle.chargeRateKw > 0.1 -> AuroraGreen
-                        else -> LucidSilver
-                    }
-                    val boltTint = if (vehicle.chargeState == ChargeState.EVSE_NOT_READY) {
-                        CrimsonAlert
-                    } else {
-                        powerColor
-                    }
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center,
@@ -869,6 +871,15 @@ private fun SimplifiedWatchDashboard(
 
         // Bottom row: drill-down pages. The outer buttons sit a little higher so the row follows
         // the curve of a round screen. Navigation stays available while controls are frozen.
+        val interiorTempC = vehicle.interiorTempCelsius
+        val climateTempText = if (interiorTempC.isNaN()) {
+            "--°"
+        } else if (uiState.useFahrenheit) {
+            "${(interiorTempC * 9.0 / 5.0 + 32.0).roundToInt()}°"
+        } else {
+            "${interiorTempC.roundToInt()}°"
+        }
+        val climateTempColor = temperatureDisplayColor(interiorTempC, uiState.useFahrenheit)
         Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -877,22 +888,23 @@ private fun SimplifiedWatchDashboard(
             horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.Bottom
         ) {
-            DrilldownNavButton(
-                icon = R.drawable.nav_thermostat_24px,
-                contentDesc = "Climate",
-                isActive = vehicle.hvacPower.isActive,
-                activeColor = AuroraGreen,
-                onClick = { onOpenPage(WatchPage.CLIMATE) },
-                testTag = "nav_climate_button",
-                modifier = Modifier.padding(bottom = 10.dp)
-            )
+            val isChargePortOpen = vehicle.chargePortState.isOpen
             DrilldownNavButton(
                 icon = R.drawable.nav_ev_station_24px,
                 contentDesc = "Charging",
-                isActive = isCharging,
-                activeColor = AuroraGreen,
+                isActive = isChargePortOpen,
+                activeColor = powerColor,
                 onClick = { onOpenPage(WatchPage.CHARGING) },
-                testTag = "nav_charging_button"
+                testTag = "nav_charging_button",
+                modifier = Modifier.padding(bottom = 10.dp)
+            )
+            ClimateTempNavButton(
+                temperatureText = climateTempText,
+                temperatureColor = climateTempColor,
+                isActive = vehicle.hvacPower.isActive,
+                activeColor = AuroraGreen,
+                onClick = { onOpenPage(WatchPage.CLIMATE) },
+                testTag = "nav_climate_button"
             )
             DrilldownNavButton(
                 icon = R.drawable.nav_campaign_24px,
@@ -959,20 +971,79 @@ private fun DrilldownNavButton(
         modifier = modifier
             .size(46.dp)
             .clip(CircleShape)
-            .background(Color(0xFF1B1B1B))
+            .background(Color(0xFF181818))
             .border(if (isActive) 2.dp else 1.dp, if (isActive) activeColor else StealthBorder, CircleShape)
             .clickable(onClick = onClick)
             .semantics { contentDescription = contentDesc }
             .testTag(testTag),
         contentAlignment = Alignment.Center
     ) {
-        // Outlined Material Symbols, the same style as the lock icon, so the row reads lighter
-        // than the old filled icons.
         Icon(
             painter = painterResource(id = icon),
             contentDescription = null,
-            tint = Color(0xFFDEC79B),
+            tint = Color(0xFFB2B2B2),
             modifier = Modifier.size(26.dp)
+        )
+    }
+}
+
+/**
+ * Temperature display color based on the active unit mode:
+ * - CryoBlue: < 60°F or < 15°C
+ * - White: >= 60°F / 15°C and < 85°F / 30°C
+ * - ThermalAmber (orange): >= 85°F / 30°C and < 104°F / 40°C
+ * - CrimsonAlert (red): >= 104°F / 40°C
+ */
+internal fun temperatureDisplayColor(celsius: Double, useFahrenheit: Boolean): Color {
+    if (celsius.isNaN()) return Color.White
+    return if (useFahrenheit) {
+        val tempF = (celsius * 9.0 / 5.0 + 32.0).roundToInt()
+        when {
+            tempF < 60 -> CryoBlue
+            tempF < 85 -> Color.White
+            tempF < 104 -> ThermalAmber
+            else -> CrimsonAlert
+        }
+    } else {
+        val tempC = celsius.roundToInt()
+        when {
+            tempC < 15 -> CryoBlue
+            tempC < 30 -> Color.White
+            tempC < 40 -> ThermalAmber
+            else -> CrimsonAlert
+        }
+    }
+}
+
+/** Small round Climate button on the home screen showing the car's interior temperature. */
+@Composable
+private fun ClimateTempNavButton(
+    temperatureText: String,
+    temperatureColor: Color,
+    isActive: Boolean,
+    activeColor: Color,
+    onClick: () -> Unit,
+    testTag: String,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .size(46.dp)
+            .clip(CircleShape)
+            .background(Color(0xFF181818))
+            .border(if (isActive) 2.dp else 1.dp, if (isActive) activeColor else StealthBorder, CircleShape)
+            .clickable(onClick = onClick)
+            .semantics { contentDescription = "Climate" }
+            .testTag(testTag),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = temperatureText,
+            color = temperatureColor,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            textAlign = TextAlign.Center
         )
     }
 }
@@ -1099,11 +1170,12 @@ internal fun ControlIconButton(
     activeColor: Color,
     inactiveColor: Color = StealthBorder,
     iconTint: Color = Color(0xFFDEC79B),
+    size: Dp? = null,
     onClick: () -> Unit,
     enabled: Boolean = true,
     testTag: String
 ) {
-    val buttonSize = if (isPrimaryCenter) 62.4.dp else 55.2.dp
+    val buttonSize = size ?: if (isPrimaryCenter) 62.4.dp else 55.2.dp
     val borderColor = if (isActive) activeColor else inactiveColor
 
     // Keyed on the ring and frozen state: on the watch the ring sometimes kept its previous

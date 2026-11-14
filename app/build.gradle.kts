@@ -8,7 +8,7 @@ plugins {
 }
 
 base {
-    archivesName.set("LucidCars")
+    archivesName.set("LucidAccess")
 }
 
 android {
@@ -19,8 +19,8 @@ android {
         applicationId = "com.droid.wearoslucidwatch"
         minSdk = 26
         targetSdk = 36
-        versionCode = 27
-        versionName = "1.3.0"
+        versionCode = 29
+        versionName = "2.0.0"
     }
 
     signingConfigs {
